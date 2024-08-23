@@ -8,6 +8,7 @@ import threading
 
 import bosdyn.client
 import bosdyn.client.util
+import bosdyn.api.power_pb2 as PowerServiceProto
 from bosdyn.client import ResponseError, RpcError
 from bosdyn.client.robot_command import RobotCommandClient, RobotCommandBuilder
 from bosdyn.client.lease import LeaseClient, LeaseKeepAlive
@@ -41,7 +42,8 @@ class SpotInterface(object):
             self._lease_keepalive.shutdown()
 
     def power_on(self):
-        self._power_client.power_command(boot_vision=True)
+        request = PowerServiceProto.PowerCommandRequest.REQUEST_ON
+        self._power_client.power_command_async(request)
 
     def move_robot(self, v_x, v_y, v_rot):
         command = RobotCommandBuilder.synchro_velocity_command(
