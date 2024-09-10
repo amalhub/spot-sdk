@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 
 import rospy
+from std_srvs.srv import Trigger, TriggerResponse
 from geometry_msgs.msg import Twist
 import math
 import time
@@ -15,8 +16,6 @@ from bosdyn.client.lease import LeaseClient, LeaseKeepAlive
 from bosdyn.client.estop import EstopClient, EstopEndpoint, EstopKeepAlive
 from bosdyn.client.time_sync import TimeSyncError
 from bosdyn.client.power import PowerClient
-
-# ... (keep other necessary imports)
 
 class SpotInterface(object):
     def __init__(self, robot):
@@ -34,6 +33,7 @@ class SpotInterface(object):
         self._estop_endpoint = EstopEndpoint(self._estop_client, 'RosSpotClient', 9.0)
         self._estop_endpoint.force_simple_setup()
         self._estop_keepalive = EstopKeepAlive(self._estop_endpoint)
+        print("Robot started")
 
     def shutdown(self):
         if self._estop_keepalive:
@@ -45,6 +45,14 @@ class SpotInterface(object):
         request = PowerServiceProto.PowerCommandRequest.REQUEST_ON
         self._power_client.power_command_async(request)
 
+    def sit_robot(self):
+        sit_command = RobotCommandBuilder.synchro_sit_command()
+        self._robot_command_client.robot_command(sit_command)
+
+    def stand_robot(self):
+        stand_command = RobotCommandBuilder.synchro_stand_command()
+        self._robot_command_client.robot_command(stand_command)
+
     def move_robot(self, v_x, v_y, v_rot):
         command = RobotCommandBuilder.synchro_velocity_command(
             v_x=v_x, v_y=v_y, v_rot=v_rot)
@@ -55,7 +63,10 @@ class RosSpotBridge(object):
     def __init__(self, robot):
         self.spot_interface = SpotInterface(robot)
         self.spot_interface.start()
-        self.spot_interface.power_on()
+
+        rospy.Service('/spot/power-on', Trigger, self.power_on_callback)
+        rospy.Service('/spot/stand', Trigger, self.stand_callback)
+        rospy.Service('/spot/sit', Trigger, self.sit_callback)
 
         rospy.Subscriber("/spot/command", Twist, self.command_callback)
 
@@ -64,6 +75,18 @@ class RosSpotBridge(object):
         v_y = msg.linear.y
         v_rot = msg.angular.z
         self.spot_interface.move_robot(v_x, v_y, v_rot)
+
+    def power_on_callback(self, req):
+        self.spot_interface.power_on()
+        return TriggerResponse(success=True, message="Spot powered on.")
+    
+    def stand_callback(self, req):
+        self.spot_interface.stand_robot()
+        return TriggerResponse(success=True, message="Spot standing.")
+    
+    def sit_callback(self, req):
+        self.spot_interface.sit_robot()
+        return TriggerResponse(success=True, message="Spot sitting.")
 
     def shutdown(self):
         self.spot_interface.shutdown()
